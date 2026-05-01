@@ -1,9 +1,9 @@
 fn main() {
     let piece_specs = create_piece_specs();
     for piece_spec in piece_specs.iter() {
-        let mut edges = piece_spec.edges();
-        edges.remove_and_combine_edges();
-        println!("{:#?}", edges);
+        let edges = piece_spec.edges();
+        let outline = edges.find_outline();
+        println!("{:#?}", outline);
     }
 }
 
@@ -15,89 +15,89 @@ fn main() {
 
 pub fn create_piece_specs() -> Vec<PieceSpec> {
     vec!(
-        // PieceSpec {
-        //     squares: vec!(
-        //         PieceSquare {x: 0, y: 0},
-        //         PieceSquare {x: 1, y: 0},
-        //         PieceSquare {x: 0, y: 1},
-        //         PieceSquare {x: 1, y: 1},
-        //     ),
-        // },
-        // PieceSpec {
-        //     squares: vec!(
-        //         PieceSquare {x: 0, y: 0},
-        //         PieceSquare {x: 0, y: 1},
-        //         PieceSquare {x: 1, y: 1},
-        //         PieceSquare {x: 2, y: 1},
-        //         PieceSquare {x: 2, y: 0},
-        //     ),
-        // },
-        // PieceSpec {
-        //     squares: vec!(
-        //         PieceSquare {x: 0, y: 0},
-        //         PieceSquare {x: 0, y: 1},
-        //         PieceSquare {x: 0, y: 2},
-        //         PieceSquare {x: 0, y: 3},
-        //         PieceSquare {x: 1, y: 2},
-        //     ),
-        // },
-        // PieceSpec {
-        //     squares: vec!(
-        //         PieceSquare {x: 0, y: 0},
-        //         PieceSquare {x: 0, y: 1},
-        //         PieceSquare {x: 0, y: 2},
-        //         PieceSquare {x: 0, y: 3},
-        //         PieceSquare {x: 1, y: 0},
-        //     ),
-        // },
-        // PieceSpec {
-        //     squares: vec!(
-        //         PieceSquare {x: 0, y: 0},
-        //         PieceSquare {x: 1, y: 0},
-        //         PieceSquare {x: 2, y: 0},
-        //         PieceSquare {x: 2, y: 1},
-        //         PieceSquare {x: 3, y: 1},
-        //     ),
-        // },
-        // PieceSpec {
-        //     squares: vec!(
-        //         PieceSquare {x: 0, y: 0},
-        //         PieceSquare {x: 0, y: 1},
-        //         PieceSquare {x: 1, y: 1},
-        //         PieceSquare {x: 2, y: 1},
-        //         PieceSquare {x: 2, y: 2},
-        //     ),
-        // },
-        // PieceSpec {
-        //     squares: vec!(
-        //         PieceSquare {x: 0, y: 0},
-        //         PieceSquare {x: 0, y: 1},
-        //         PieceSquare {x: 0, y: 2},
-        //         PieceSquare {x: 1, y: 2},
-        //         PieceSquare {x: 2, y: 2},
-        //     ),
-        // },
-        // PieceSpec {
-        //     squares: vec!(
-        //         PieceSquare {x: 0, y: 0},
-        //         PieceSquare {x: 1, y: 0},
-        //         PieceSquare {x: 2, y: 0},
-        //         PieceSquare {x: 0, y: 1},
-        //         PieceSquare {x: 1, y: 1},
-        //         PieceSquare {x: 2, y: 1},
-        //         PieceSquare {x: 3, y: 1},
-        //     ),
-        // },
-        // PieceSpec {
-        //     squares: vec!(
-        //         PieceSquare {x: 0, y: 0},
-        //     ),
-        // },
-        // PieceSpec {
-        //     squares: vec!(
-        //         PieceSquare {x: 0, y: 0},
-        //     ),
-        // },
+        PieceSpec {
+            squares: vec!(
+                PieceSquare {x: 0, y: 0},
+                PieceSquare {x: 1, y: 0},
+                PieceSquare {x: 0, y: 1},
+                PieceSquare {x: 1, y: 1},
+            ),
+        },
+        PieceSpec {
+            squares: vec!(
+                PieceSquare {x: 0, y: 0},
+                PieceSquare {x: 0, y: 1},
+                PieceSquare {x: 1, y: 1},
+                PieceSquare {x: 2, y: 1},
+                PieceSquare {x: 2, y: 0},
+            ),
+        },
+        PieceSpec {
+            squares: vec!(
+                PieceSquare {x: 0, y: 0},
+                PieceSquare {x: 0, y: 1},
+                PieceSquare {x: 0, y: 2},
+                PieceSquare {x: 0, y: 3},
+                PieceSquare {x: 1, y: 2},
+            ),
+        },
+        PieceSpec {
+            squares: vec!(
+                PieceSquare {x: 0, y: 0},
+                PieceSquare {x: 0, y: 1},
+                PieceSquare {x: 0, y: 2},
+                PieceSquare {x: 0, y: 3},
+                PieceSquare {x: 1, y: 0},
+            ),
+        },
+        PieceSpec {
+            squares: vec!(
+                PieceSquare {x: 0, y: 0},
+                PieceSquare {x: 1, y: 0},
+                PieceSquare {x: 2, y: 0},
+                PieceSquare {x: 2, y: 1},
+                PieceSquare {x: 3, y: 1},
+            ),
+        },
+        PieceSpec {
+            squares: vec!(
+                PieceSquare {x: 0, y: 0},
+                PieceSquare {x: 0, y: 1},
+                PieceSquare {x: 1, y: 1},
+                PieceSquare {x: 2, y: 1},
+                PieceSquare {x: 2, y: 2},
+            ),
+        },
+        PieceSpec {
+            squares: vec!(
+                PieceSquare {x: 0, y: 0},
+                PieceSquare {x: 0, y: 1},
+                PieceSquare {x: 0, y: 2},
+                PieceSquare {x: 1, y: 2},
+                PieceSquare {x: 2, y: 2},
+            ),
+        },
+        PieceSpec {
+            squares: vec!(
+                PieceSquare {x: 0, y: 0},
+                PieceSquare {x: 1, y: 0},
+                PieceSquare {x: 2, y: 0},
+                PieceSquare {x: 0, y: 1},
+                PieceSquare {x: 1, y: 1},
+                PieceSquare {x: 2, y: 1},
+                PieceSquare {x: 3, y: 1},
+            ),
+        },
+        PieceSpec {
+            squares: vec!(
+                PieceSquare {x: 0, y: 0},
+            ),
+        },
+        PieceSpec {
+            squares: vec!(
+                PieceSquare {x: 0, y: 0},
+            ),
+        },
         PieceSpec {
             squares: vec!(
                 PieceSquare {x: 0, y: 0},
@@ -155,6 +155,17 @@ pub struct Point {
     pub y: i32,
 }
 
+impl Point {
+    pub fn origin() -> Point {
+        Point {x: 0, y: 0}
+    }
+
+    // Returns true if this point is in line with the other two Points.  Only handles vertical and horizontal lines
+    pub fn is_inline(&self, p1: &Point, p2: &Point) -> bool {
+        (self.x == p1.x && self.x == p2.x) || (self.y == p1.y && self.y == p2.y)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Copy, Eq)]
 pub struct Edge {
     pub p1: Point,
@@ -162,47 +173,87 @@ pub struct Edge {
 }
 
 #[derive(Debug, Clone, PartialEq, Copy, Eq)]
-pub enum EdgeOrientation {
-    Horizontal,
-    Vertical,
+pub enum Dir {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+impl Dir {
+    // Returns the search order for dirs that are the "most left" of this dir
+    pub fn leftmost_dirs(&self) -> Vec<Dir> {
+        match self {
+            Self::Left => vec!(Self::Down, Self::Left, Self::Up),
+            Self::Down => vec!(Self::Right, Self::Down, Self::Left),
+            Self::Right => vec!(Self::Up, Self::Right, Self::Down),
+            Self::Up => vec!(Self::Left, Self::Up, Self::Right),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Path {
+    pub points: Vec<Point>
+}
+
+impl Path {
+    pub fn new() -> Path {
+        Path {
+            points: Vec::<Point>::new(),
+        }
+    }
+    
+    // Adds the given point.  If the point is inline with the previous two points, then the previous point is removed before adding
+    pub fn add_point(&mut self, point: &Point) {
+        if self.points.len() >= 2 &&
+            let Some(m2) = self.points.get(self.points.len() - 2) &&
+            let Some(m1) = self.points.get(self.points.len() - 1) &&
+            point.is_inline(m1, m2) {
+                self.points.pop();
+            }
+        self.points.push(*point);
+    }
+    
+    // Combine points that are along the same line
+    pub fn coalesce(&self) -> Path {
+        let mut ret = Path::new();
+        for p in self.points.iter() {
+            ret.add_point(p);
+        }
+
+        // Add the first point back in, to coalesce to the first point
+        if let Some(first) = self.points.first() {
+            ret.add_point(first);
+            ret.points.pop();
+        }
+
+        ret
+    }
 }
 
 impl Edge {
-    // Return true if these are the same edge, even with points flipped
-    pub fn same_edge(&self, e2: &Edge) -> bool {
-        (self.p1 == e2.p1 && self.p2 == e2.p2) ||
-            (self.p1 == e2.p2 && self.p2 == e2.p1)
-    }
-
-    // Return if the edge is oriented horizontally or vertically
-    pub fn orientation(&self) -> EdgeOrientation {
-        if self.p1.x == self.p2.x {EdgeOrientation::Vertical}
-        else {EdgeOrientation::Horizontal}
-    }
-
-    // If this edge and the given edge are the same direction and share a common endpoint, return a single edge that encompasses both
-    pub fn combine(&self, e2: &Edge) -> Option<Edge> {
-        if self.orientation() != e2.orientation() {
-            None
-        }
-        else {
-            if self.p1 == e2.p1 {
-                Some(Edge { p1: self.p2, p2: e2.p2 })
-            }
-            else if self.p1 == e2.p2 {
-                Some(Edge { p1: self.p2, p2: e2.p1 })
-            }
-            else if self.p2 == e2.p1 {
-                Some(Edge { p1: self.p1, p2: e2.p2 })
-            }
-            else if self.p2 == e2.p2 {
-                Some(Edge { p1: self.p1, p2: e2.p1 })
+    pub fn dir(&self) -> Dir {
+        // Vertical
+        if self.p1.x == self.p2.x {
+            if self.p1.y < self.p2.y {
+                Dir::Down
             }
             else {
-                None
+                Dir::Up
+            }
+        }
+        // Horizontal
+        else {
+            if self.p1.x < self.p2.x {
+                Dir::Right
+            }
+            else {
+                Dir::Left
             }
         }
     }
+
 }
 
 #[derive(Debug, Clone)]
@@ -211,98 +262,74 @@ pub struct Edges {
 }
 
 impl Edges {
-    // Searches all the edges, except for ix, looking for an edge that is the same as the edge at ix.  If found, returns the index of the found edge
-    pub fn find_same_edge(&self, e: &Edge, ix: usize) -> Option<usize> {
-        for (i, e2) in self.edges.iter().enumerate() {
-            if ix != i && e.same_edge(e2) {
-                return Some(ix)
+    // Searches for all edges that contain the given point, and returns those edges such that the first point is p
+    pub fn find_edges_with_point(&self, p: Point) -> Vec<Edge> {
+        let mut ret = Vec::<Edge>::new();
+        for e in self.edges.iter() {
+            if e.p1 == p {
+                ret.push(Edge {
+                    p1: p,
+                    p2: e.p2,
+                })
+            }
+            else if e.p2 == p {
+                ret.push(Edge {
+                    p1: p,
+                    p2: e.p1,
+                })
+            }
+        }
+        ret
+    }
+
+    // Searches for the edge that connects to the given edge, that points most to the left
+    pub fn find_leftmost_edge(&self, e: &Edge) -> Option<Edge> {
+        // Get all the edges that attach to this edge's last point
+        let edges = self.find_edges_with_point(e.p2);
+        // Run through the dirs from leftmost to rightmost
+        for dir in e.dir().leftmost_dirs() {
+            for edge in edges.iter() {
+                if edge.dir() == dir {
+                    return Some(*edge)
+                }
             }
         }
         None
     }
 
-    // Removes one pair of common edges.  Returns true if any were removed
-    pub fn remove_common_edges_one_pass(&mut self) -> bool {
-        for (i, e) in self.edges.iter().enumerate() {
-            // See if an edge is found
-            if let Some(ix) = self.find_same_edge(e, i) {
-                if i < ix {
-                    self.edges.remove(ix);
-                    self.edges.remove(i);
+    // Search for an edge that starts at 0,0
+    pub fn find_initial_edge(&self) -> Option<Edge> {
+        let edges = self.find_edges_with_point(Point::origin());
+        match edges.get(0) {
+            Some(e) => Some(*e),
+            None => None
+        }
+    }
+
+    pub fn find_outline(&self) -> Option<Path> {
+        let mut edges = Vec::<Edge>::new();
+        if let Some(initial_edge) = self.find_initial_edge() {
+            edges.push(initial_edge);
+
+            // From the end of the outline, look for the edge that is "turning left" the most, and follow that
+            while let Some(last) = edges.last() {
+                if last.p2 == Point::origin() {
+                    break
+                }
+                if let Some(e) = self.find_leftmost_edge(last) {
+                    edges.push(e);
                 }
                 else {
-                    self.edges.remove(i);
-                    self.edges.remove(ix);
+                    return None
                 }
-                return true
             }
+
+            // Map to the points
+            let path = Path {points: edges.iter().map(|e| e.p1).collect()}.coalesce();
+            Some(path)
         }
-        false
-    }
-
-    // Keeps removing common edges until none remain.  Returns true if any were removed
-    pub fn remove_common_edges(&mut self) -> bool {
-        let mut ret = false;
-        loop {
-            if self.remove_common_edges_one_pass() {
-                ret = true;
-            }
-            else {
-                return ret
-            }
+        else {
+            None
         }
-    }
-
-    // Searches all the edges, except for ix, looking for an edge that can be combined with the edge at ix.  If found, returns the index of the found edge and the new combined edge
-    pub fn find_combinable_edge(&self, e: &Edge, ix: usize) -> Option<(usize, Edge)> {
-        for (i, e2) in self.edges.iter().enumerate() {
-            if ix != i && let Some(ec) = e.combine(e2) {
-                return Some((ix, ec))
-            }
-        }
-        None
-    }
-
-    // Combines one pair of edges.  Returns true if any were combined
-    pub fn combine_edges_one_pass(&mut self) -> bool {
-        for (i, e) in self.edges.iter().enumerate() {
-            // See if an edge is found
-            if let Some((ix, ec)) = self.find_combinable_edge(e, i) {
-                if i < ix {
-                    self.edges.remove(ix);
-                    self.edges.remove(i);
-                }
-                else {
-                    self.edges.remove(i);
-                    self.edges.remove(ix);
-                }
-                self.edges.push(ec);
-                return true
-            }
-        }
-        false
-    }
-
-    // Keeps combining edges until none remain.  Returns true if any were combined
-    pub fn combine_edges(&mut self) -> bool {
-        let mut ret = false;
-        loop {
-            if self.combine_edges_one_pass() {
-                println!("combined edges!!");
-                println!("{:#?}", self);
-                ret = true;
-            }
-            else {
-                return ret
-            }
-        }
-    }
-
-    pub fn remove_and_combine_edges_one_pass(&mut self) -> bool {
-        self.remove_common_edges() || self.combine_edges()
-    }
-
-    pub fn remove_and_combine_edges(&mut self) {
-        while self.remove_and_combine_edges_one_pass() {}
     }
 }
