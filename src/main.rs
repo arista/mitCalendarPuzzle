@@ -3,7 +3,10 @@ fn main() {
     for piece_spec in piece_specs.iter() {
         let edges = piece_spec.edges();
         let outline = edges.find_outline();
-        println!("{:#?}", outline);
+        let piece = Piece::from_piece_spec(piece_spec);
+//        println!("{:#?}", outline);
+        println!("{:#?} = {:?}", piece.square_count, piece.orientations.len());
+//        println!("{:#?}", piece);
     }
 }
 
@@ -107,6 +110,7 @@ pub fn create_piece_specs() -> Vec<PieceSpec> {
     )
 }
 
+#[derive(Debug, Clone, PartialEq, Copy, Eq, PartialOrd, Ord)]
 pub struct PieceSquare {
     pub x: i32,
     pub y: i32,
@@ -126,6 +130,30 @@ impl PieceSquare {
             Edge {p1: ll, p2: ul},
         )
     }
+
+    pub fn orient(self, o: &Orientation) -> PieceSquare {
+        let p: Point = self.into();
+        p.orient(o).into()
+    }
+
+    pub fn translate(&self, t: &Translation) -> Self {
+        PieceSquare {
+            x: self.x + t.dx,
+            y: self.y + t.dy,
+        }
+    }
+}
+
+impl From<Point> for PieceSquare {
+    fn from(item: Point) -> PieceSquare {
+        PieceSquare {x: item.x, y: item.y }
+    }
+}
+
+impl From<PieceSquare> for Point {
+    fn from(item: PieceSquare) -> Point {
+        Point {x: item.x, y: item.y }
+    }
 }
 
 pub struct PieceSpec {
@@ -134,13 +162,17 @@ pub struct PieceSpec {
 
 impl PieceSpec {
     pub fn edges(&self) -> Edges {
-        let mut ret = Vec::<Edge>::new();
-        for square in &self.squares {
-            ret.extend(&square.edges());
-        }
-        Edges {
-            edges: ret,
-        }
+        edges_from_piece_squares(&self.squares)
+    }
+}
+
+pub fn edges_from_piece_squares(squares: &Vec<PieceSquare>) -> Edges {
+    let mut ret = Vec::<Edge>::new();
+    for square in squares {
+        ret.extend(&square.edges());
+    }
+    Edges {
+        edges: ret,
     }
 }
 
@@ -149,7 +181,7 @@ impl PieceSpec {
 // Compute various forms of the pieces
 
 
-#[derive(Debug, Clone, PartialEq, Copy, Eq)]
+#[derive(Debug, Clone, PartialEq, Copy, Eq, PartialOrd, Ord)]
 pub struct Point {
     pub x: i32,
     pub y: i32,
@@ -163,6 +195,42 @@ impl Point {
     // Returns true if this point is in line with the other two Points.  Only handles vertical and horizontal lines
     pub fn is_inline(&self, p1: &Point, p2: &Point) -> bool {
         (self.x == p1.x && self.x == p2.x) || (self.y == p1.y && self.y == p2.y)
+    }
+
+    pub fn rot_90_ccw(&self) -> Point {
+        Point {x: self.y, y: -self.x}
+    }
+
+    pub fn rot_180_ccw(&self) -> Point {
+        self.rot_90_ccw().rot_90_ccw()
+    }
+
+    pub fn rot_270_ccw(&self) -> Point {
+        self.rot_90_ccw().rot_90_ccw().rot_90_ccw()
+    }
+
+    pub fn flip_h(&self) -> Point {
+        Point {x: -self.x, y: self.y}
+    }
+
+    pub fn orient(&self, o: &Orientation) -> Point {
+        match o {
+            Orientation::Original => *self,
+            Orientation::Rot90CCW => self.rot_90_ccw(),
+            Orientation::Rot180CCW => self.rot_180_ccw(),
+            Orientation::Rot270CCW => self.rot_270_ccw(),
+            Orientation::FlipH => self.flip_h(),
+            Orientation::FlipHRot90CCW => self.flip_h().rot_90_ccw(),
+            Orientation::FlipHRot180CCW => self.flip_h().rot_180_ccw(),
+            Orientation::FlipHRot270CCW => self.flip_h().rot_270_ccw(),
+        }
+    }
+
+    pub fn translate(&self, t: &Translation) -> Point {
+        Point {
+            x: self.x + t.dx,
+            y: self.y + t.dy,
+        }
     }
 }
 
@@ -192,7 +260,33 @@ impl Dir {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Orientation {
+    Original,
+    Rot90CCW,
+    Rot180CCW,
+    Rot270CCW,
+    FlipH,
+    FlipHRot90CCW,
+    FlipHRot180CCW,
+    FlipHRot270CCW,
+}
+
+impl Orientation {
+    pub fn all() -> Vec<Self> {
+        vec!(
+            Self::Original,
+            Self::Rot90CCW,
+            Self::Rot180CCW,
+            Self::Rot270CCW,
+            Self::FlipH,
+            Self::FlipHRot90CCW,
+            Self::FlipHRot180CCW,
+            Self::FlipHRot270CCW,
+            )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Path {
     pub points: Vec<Point>
 }
@@ -229,6 +323,18 @@ impl Path {
         }
 
         ret
+    }
+
+    pub fn orient(&self, o: &Orientation) -> Path {
+        Path {
+            points: self.points.iter().map(|p| p.orient(o)).collect(),
+        }
+    }
+
+    pub fn translate(&self, t: &Translation) -> Path {
+        Path {
+            points: self.points.iter().map(|p| p.translate(t)).collect(),
+        }
     }
 }
 
@@ -331,5 +437,123 @@ impl Edges {
         else {
             None
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PieceSquaresBuilder {
+    pub extents: Option<Extents>,
+    pub squares: Vec<PieceSquare>,
+}
+
+impl PieceSquaresBuilder {
+    pub fn add(&mut self, s: PieceSquare) {
+        match &mut self.extents {
+            Some(e) => e.add(&s),
+            None => self.extents = Some(Extents::new(&s)),
+        }
+        self.squares.push(s);
+    }
+
+    pub fn from_spec(spec: &PieceSpec, o: &Orientation) -> PieceSquares {
+        let mut ps1 = PieceSquaresBuilder::default();
+        for &s in spec.squares.iter() {
+            ps1.add(s.orient(o));
+        }
+        let extents = ps1.extents.unwrap_or_default();
+        let translation = extents.to_translation();
+        let translated_extents = extents.translate(&translation);
+        let mut squares:Vec<PieceSquare> = ps1.squares.iter().map(|s| s.translate(&translation)).collect();
+        // Sort the squares so we can compare against other sets of squares
+        squares.sort();
+
+        let outline = edges_from_piece_squares(&squares).find_outline().unwrap_or_default();
+
+        PieceSquares {
+            extents: translated_extents,
+            squares,
+            outline,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PieceSquares {
+    pub extents: Extents,
+    pub squares: Vec<PieceSquare>,
+    pub outline: Path,
+}
+
+#[derive(Debug, Clone, PartialEq, Copy, Eq, PartialOrd, Ord, Default)]
+pub struct Extents {
+    l: i32,
+    r: i32,
+    t: i32,
+    b: i32,
+}
+
+impl Extents {
+    pub fn new(s: &PieceSquare) -> Extents {
+        Extents {
+            l: s.x,
+            r: s.x,
+            t: s.y,
+            b: s.y,
+        }
+    }
+
+    pub fn add(&mut self, s: &PieceSquare) {
+        if s.x < self.l {
+            self.l = s.x;
+        }
+        if s.x > self.r {
+            self.r = s.x;
+        }
+        if s.y < self.t {
+            self.t = s.y;
+        }
+        if s.y > self.b {
+            self.b = s.y;
+        }
+    }
+
+    // Returns the translate that moves l, t to 0, 0
+    pub fn to_translation(&self) -> Translation {
+        Translation {
+            dx: -self.l,
+            dy: -self.t,
+        }
+    }
+
+    pub fn translate(&self, t: &Translation) -> Extents {
+        Extents {
+            l: self.l + t.dx,
+            r: self.r + t.dx,
+            t: self.t + t.dy,
+            b: self.b + t.dy,
+        }
+    }
+}
+
+pub struct Translation {
+    pub dx: i32,
+    pub dy: i32,
+}
+
+
+#[derive(Debug, Clone)]
+pub struct Piece {
+    pub square_count: usize,
+    pub orientations: Vec<PieceSquares>,
+}
+
+impl Piece {
+    pub fn from_piece_spec(spec: &PieceSpec) -> Piece {
+        let square_count = spec.squares.len();
+        let mut orientations: Vec<PieceSquares> = Orientation::all().iter().map(|o| PieceSquaresBuilder::from_spec(&spec, o)).collect();
+        // Remove duplicate orientations
+        orientations.sort();
+        orientations.dedup();
+        Piece {square_count, orientations}
     }
 }
