@@ -557,3 +557,139 @@ impl Piece {
         Piece {square_count, orientations}
     }
 }
+
+//--------------------------------------------------
+
+pub struct PlacedPiece<'a> {
+    pub piece: &'a Piece,
+    pub placement: Placement<'a>,
+}
+
+pub enum Placement<'a> {
+    // The piece is deliberately left off
+    Unplaced,
+    // The piece is placed with a specific orientation originating at a particular point
+    Placed(PiecePlacement<'a>),
+}
+
+pub struct PiecePlacement<'a> {
+    pub orientation_num: usize,
+    pub x: i32,
+    pub y: i32,
+    pub squares: &'a PieceSquares,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Board {
+    pub rows: Vec<BoardRow>
+}
+
+impl<'a> Board {
+    pub fn new(row_count: usize, column_count: usize) -> Self {
+        let mut rows = Vec::<BoardRow>::new();
+        for _ in 0..row_count {
+            rows.push(BoardRow::new(column_count));
+        }
+        Board {
+            rows
+        }
+    }
+    
+    pub fn square_at(&'a self, x: i32, y: i32) -> &'a BoardSquare {
+        let xu:usize = usize::try_from(x).expect("x cannot be negative");
+        let yu:usize = usize::try_from(y).expect("y cannot be negative");
+        &self.rows[yu].squares[xu]
+    }
+
+    pub fn square_at_mut(&'a mut self, x: i32, y: i32) -> &'a mut BoardSquare {
+        let xu:usize = usize::try_from(x).expect("x cannot be negative");
+        let yu:usize = usize::try_from(y).expect("y cannot be negative");
+        &mut self.rows[yu].squares[xu]
+    }
+    
+    pub fn set_status(&mut self, x: i32, y: i32, status: BoardSquareStatus) {
+        self.square_at_mut(x, y).status = status;
+    }
+
+    pub fn can_place_at(&self, x: i32, y: i32) -> bool {
+        self.square_at(x, y).status.can_place()
+    }
+
+    pub fn place_at(&mut self, x: i32, y: i32) {
+        self.square_at_mut(x, y).status = BoardSquareStatus::Placed;
+    }
+
+    pub fn unplace_at(&mut self, x: i32, y: i32) {
+        self.square_at_mut(x, y).status = BoardSquareStatus::Empty;
+    }
+
+    pub fn can_place_squares_at(&self, x: i32, y: i32, squares: &PieceSquares) -> bool {
+        for &square in &squares.squares {
+            if !self.can_place_at(x + square.x, y + square.y) {
+                return false
+            }
+        }
+        true
+    }
+
+    pub fn place_squares_at(&mut self, x: i32, y: i32, squares: &PieceSquares) {
+        for &square in &squares.squares {
+            self.place_at(x + square.x, y + square.y)
+        }
+    }
+
+    pub fn unplace_squares_at(&mut self, x: i32, y: i32, squares: &PieceSquares) {
+        for &square in &squares.squares {
+            self.unplace_at(x + square.x, y + square.y)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct BoardRow {
+    pub squares: Vec<BoardSquare>
+}
+
+impl BoardRow {
+    pub fn new(column_count: usize) -> Self {
+        let mut squares = Vec::<BoardSquare>::new();
+        for _ in 0..column_count {
+            squares.push(BoardSquare::default());
+        }
+        BoardRow {
+            squares
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct BoardSquare {
+    status: BoardSquareStatus
+}
+
+impl BoardSquare {
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BoardSquareStatus {
+    // One of the squares that's supposed to remain open as a target
+    Target,
+    // Permanently blocked square on the board
+    Blocked,
+    // Occupied by a piece
+    Placed,
+    // Available for a piece
+    Empty,
+}
+
+impl BoardSquareStatus {
+    pub fn can_place(&self) -> bool {
+        *self == Self::Empty
+    }
+}
+
+impl Default for BoardSquareStatus {
+    fn default() -> Self {
+        Self::Empty
+    }
+}
