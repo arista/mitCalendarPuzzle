@@ -7,10 +7,14 @@ fn main() {
     board.set_blocked(5, 6);
     board.set_blocked(6, 6);
 
+    board.set_blocked(3, 0);
+    board.set_blocked(1, 6);
+
     let piece_specs = create_piece_specs();
     let pieces: Vec<Piece> = piece_specs.iter().map(|ps| Piece::from_piece_spec(ps)).collect();
 
     let mut placed_pieces = PlacedPieces::new();
+    placed_pieces.place_pieces(&mut board, &pieces);
 
 //     for piece_spec in piece_specs.iter() {
 //         let edges = piece_spec.edges();
@@ -573,31 +577,148 @@ impl Piece {
 //--------------------------------------------------
 
 pub struct PlacedPieces {
-    pub next_piece_num: usize,
-    pub placed_pieces: Vec<PlacedPiece>,
+    pub placed_pieces: Vec<Placement>,
 }
 
 impl PlacedPieces {
     pub fn new() -> Self {
         Self {
-            next_piece_num: 0,
             placed_pieces: vec!(),
+        }
+    }
+
+    // Tries to place the next piece, returns true if successful, false if not
+    pub fn try_place_next_piece(&mut self, board: &mut Board, pieces: &Vec<Piece>) -> bool {
+        let piece_num = self.placed_pieces.len();
+        let piece = &pieces[piece_num];
+        if let Some(placement) = Placement::new().next_placeable(board, piece) {
+            // We're able to place this piece, so add it to the list
+            placement.place(board, piece);
+            self.placed_pieces.push(placement);
+            true
+        }
+        else {
+            false
+        }
+    }
+
+    // Pops the previous piece and tries to advance and place it.  Returns true if successful, false if not
+    pub fn try_place_prev_piece(&mut self, board: &mut Board, pieces: &Vec<Piece>) -> bool {
+        if let Some(pp) = self.placed_pieces.pop() {
+            let piece_num = self.placed_pieces.len();
+            let piece = &pieces[piece_num];
+            if let Some(placement) = pp.next_placeable(board, piece) {
+                // We're able to place this piece, so add it to the list
+                placement.place(board, piece);
+                self.placed_pieces.push(placement);
+                true
+            }
+            else {
+                false
+            }
+        }
+        else {
+            false
+        }
+    }
+
+    // Go through the already-placed pieces and keep advancing until we get to one we can advance and place.  Returns true if successful, false if none could be found
+    pub fn backtrack(&mut self, board: &mut Board, pieces: &Vec<Piece>) -> bool {
+        loop {
+            if self.placed_pieces.is_empty() {
+                return false
+            }
+            else if self.try_place_prev_piece(board, pieces) {
+                return true
+            }
+        }
+    }
+
+    pub fn place_pieces(&mut self, board: &mut Board, pieces: &Vec<Piece>) -> bool {
+        loop {
+            let piece_num = self.placed_pieces.len();
+            if piece_num >= pieces.len() {
+                // All pieces have been placed!
+                return true
+            }
+            else {
+                // Try to place the next piece
+                if !self.try_place_next_piece(board, pieces) {
+                    if !self.backtrack(board, pieces) {
+                        return false
+                    }
+                }
+            }
         }
     }
 }
 
-pub struct PlacedPiece {
-    pub piece_num: usize,
-    pub placement: Placement,
-}
-
+//--------------------------------------------------
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Placement {
-    // The piece is deliberately left off
-    SetAside,
     // Successfully placed
     Placed(PiecePlacement),
+    // The piece is deliberately left off
+    SetAside,
 }
 
+impl Placement {
+    pub fn new() -> Self {
+        Self::Placed(PiecePlacement::new())
+    }
+    
+    pub fn can_place(&self, board: &Board, piece: &Piece) -> bool {
+        match self {
+            Placement::Placed(pp) => pp.can_place(board, piece),
+            Placement::SetAside => board.can_set_aside(piece.square_count),
+        }
+    }
+
+    pub fn place(&self, board: &mut Board, piece: &Piece) {
+        match self {
+            Placement::Placed(pp) => {pp.place(board, piece);},
+            Placement::SetAside => {board.set_aside(piece.square_count);},
+        }
+    }
+    
+    pub fn unplace(&self, board: &mut Board, piece: &Piece) {
+        match self {
+            Placement::Placed(pp) => {pp.unplace(board, piece);},
+            Placement::SetAside => {board.unset_aside(piece.square_count);},
+        }
+    }
+
+    // Return the next possible placement to try, None if there aren't any more
+    pub fn next_to_try(&self, board: &Board, piece: &Piece) -> Option<Self> {
+        match self {
+            Placement::Placed(pp) => {
+                if let Some(pp2) = pp.next_to_try(board, piece) {
+                    Some(Self::Placed(pp2))
+                }
+                else {
+                    Some(Placement::SetAside)
+                }
+            },
+            Placement::SetAside => None,
+        }
+    }
+
+    // Checks if this is currently placeable, calling next_to_try until it is.  Returns the next placeable, None if there aren't any
+    pub fn next_placeable(&self, board: &Board, piece: &Piece) -> Option<Self> {
+        let mut p = *self;
+        loop {
+            if p.can_place(board, piece) {
+                return Some(p)
+            }
+            match p.next_to_try(board, piece) {
+                Some(p2) => {p = p2;}
+                None => {return None;}
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PiecePlacement {
     pub orientation_num: usize,
     pub x: i32,
@@ -627,7 +748,8 @@ impl PiecePlacement {
         let piece_squares = &piece.orientations[self.orientation_num];
         board.unplace_squares_at(self.x, self.y, piece_squares)
     }
-    
+
+    // Return the next possible placement to try, None if there aren't any more
     pub fn next_to_try(&self, board: &Board, piece: &Piece) -> Option<Self> {
         let piece_squares = &piece.orientations[self.orientation_num];
         if self.x < (board.column_count as i32) - piece_squares.extents.r {
@@ -656,13 +778,19 @@ impl PiecePlacement {
         }
     }
 
-    pub fn next_placeable(&mut self, board: &Board, piece: &Piece) -> Option<Self> {
-        while let Some(p) = self.next_to_try(board, piece) {
+    // Checks if this is currently placeable, calling next_to_try until it is.  Returns the next placeable, None if there aren't any
+    pub fn next_placeable(&self, board: &Board, piece: &Piece) -> Option<Self> {
+        let mut p = *self;
+        loop {
             if p.can_place(board, piece) {
-                Some(p)
+                return Some(p)
+            }
+            match p.next_to_try(board, piece) {
+                Some(p2) => {p = p2;}
+                None => {return None;}
             }
         }
-        None
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -690,7 +818,7 @@ impl<'a> Board {
     }
     
     pub fn square_at(&'a self, x: i32, y: i32) -> &'a BoardSquare {
-        let xu:usize = usize::try_from(x).expect("x cannot be negative");
+        let xu:usize = usize::try_from(x).expect("");
         let yu:usize = usize::try_from(y).expect("y cannot be negative");
         &self.rows[yu].squares[xu]
     }
@@ -715,6 +843,10 @@ impl<'a> Board {
     
     pub fn set_blocked(&mut self, x: i32, y: i32) {
         self.set_status(x, y, BoardSquareStatus::Blocked)
+    }
+
+    pub fn set_target(&mut self, x: i32, y: i32) {
+        self.set_status(x, y, BoardSquareStatus::Target)
     }
 
     pub fn can_place_at(&self, x: i32, y: i32) -> bool {
