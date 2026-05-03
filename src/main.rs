@@ -1,13 +1,25 @@
 fn main() {
+    let mut board = Board::new(7, 7);
+    board.set_blocked(6, 0);
+    board.set_blocked(6, 1);
+    board.set_blocked(3, 6);
+    board.set_blocked(4, 6);
+    board.set_blocked(5, 6);
+    board.set_blocked(6, 6);
+
     let piece_specs = create_piece_specs();
-    for piece_spec in piece_specs.iter() {
-        let edges = piece_spec.edges();
-        let outline = edges.find_outline();
-        let piece = Piece::from_piece_spec(piece_spec);
-//        println!("{:#?}", outline);
-        println!("{:#?} = {:?}", piece.square_count, piece.orientations.len());
-//        println!("{:#?}", piece);
-    }
+    let pieces: Vec<Piece> = piece_specs.iter().map(|ps| Piece::from_piece_spec(ps)).collect();
+
+    let mut placed_pieces = PlacedPieces::new();
+
+//     for piece_spec in piece_specs.iter() {
+//         let edges = piece_spec.edges();
+//         let outline = edges.find_outline();
+//         let piece = Piece::from_piece_spec(piece_spec);
+// //        println!("{:#?}", outline);
+//         println!("{:#?} = {:?}", piece.square_count, piece.orientations.len());
+// //        println!("{:#?}", piece);
+//     }
 }
 
 //--------------------------------------------------
@@ -560,28 +572,106 @@ impl Piece {
 
 //--------------------------------------------------
 
-pub struct PlacedPiece<'a> {
-    pub piece: &'a Piece,
-    pub placement: Placement<'a>,
+pub struct PlacedPieces {
+    pub next_piece_num: usize,
+    pub placed_pieces: Vec<PlacedPiece>,
 }
 
-pub enum Placement<'a> {
+impl PlacedPieces {
+    pub fn new() -> Self {
+        Self {
+            next_piece_num: 0,
+            placed_pieces: vec!(),
+        }
+    }
+}
+
+pub struct PlacedPiece {
+    pub piece_num: usize,
+    pub placement: Placement,
+}
+
+pub enum Placement {
     // The piece is deliberately left off
-    Unplaced,
-    // The piece is placed with a specific orientation originating at a particular point
-    Placed(PiecePlacement<'a>),
+    SetAside,
+    // Successfully placed
+    Placed(PiecePlacement),
 }
 
-pub struct PiecePlacement<'a> {
+pub struct PiecePlacement {
     pub orientation_num: usize,
     pub x: i32,
     pub y: i32,
-    pub squares: &'a PieceSquares,
+}
+
+impl PiecePlacement {
+    pub fn new() -> Self {
+        PiecePlacement {
+            orientation_num: 0,
+            x: 0,
+            y: 0,
+        }
+    }
+    
+    pub fn can_place(&self, board: &Board, piece: &Piece) -> bool {
+        let piece_squares = &piece.orientations[self.orientation_num];
+        board.can_place_squares_at(self.x, self.y, piece_squares)
+    }
+    
+    pub fn place(&self, board: &mut Board, piece: &Piece) {
+        let piece_squares = &piece.orientations[self.orientation_num];
+        board.place_squares_at(self.x, self.y, piece_squares)
+    }
+    
+    pub fn unplace(&self, board: &mut Board, piece: &Piece) {
+        let piece_squares = &piece.orientations[self.orientation_num];
+        board.unplace_squares_at(self.x, self.y, piece_squares)
+    }
+    
+    pub fn next_to_try(&self, board: &Board, piece: &Piece) -> Option<Self> {
+        let piece_squares = &piece.orientations[self.orientation_num];
+        if self.x < (board.column_count as i32) - piece_squares.extents.r {
+            Some(Self {
+                orientation_num: self.orientation_num,
+                x: self.x + 1,
+                y: self.y,
+            })
+        }
+        else if self.y < (board.row_count as i32) - piece_squares.extents.b {
+            Some(Self {
+                orientation_num: self.orientation_num,
+                x: 0,
+                y: self.y + 1,
+            })
+        }
+        else if self.orientation_num < piece.orientations.len() {
+            Some(Self {
+                orientation_num: self.orientation_num + 1,
+                x: 0,
+                y: 0,
+            })
+        }
+        else {
+            None
+        }
+    }
+
+    pub fn next_placeable(&mut self, board: &Board, piece: &Piece) -> Option<Self> {
+        while let Some(p) = self.next_to_try(board, piece) {
+            if p.can_place(board, piece) {
+                Some(p)
+            }
+        }
+        None
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Board {
-    pub rows: Vec<BoardRow>
+    pub column_count: usize,
+    pub row_count: usize,
+    pub rows: Vec<BoardRow>,
+    pub empty_count: usize,
+    pub set_aside_count: usize,
 }
 
 impl<'a> Board {
@@ -591,7 +681,11 @@ impl<'a> Board {
             rows.push(BoardRow::new(column_count));
         }
         Board {
-            rows
+            row_count,
+            column_count,
+            rows,
+            empty_count: row_count * column_count,
+            set_aside_count: 0,
         }
     }
     
@@ -608,7 +702,19 @@ impl<'a> Board {
     }
     
     pub fn set_status(&mut self, x: i32, y: i32, status: BoardSquareStatus) {
-        self.square_at_mut(x, y).status = status;
+        let square = self.square_at_mut(x, y);
+        let status_before = square.status;
+        square.status = status;
+        if status_before.is_empty() && !status.is_empty() {
+            self.empty_count -= 1;
+        }
+        else if !status_before.is_empty() && status.is_empty() {
+            self.empty_count += 1;
+        }
+    }
+    
+    pub fn set_blocked(&mut self, x: i32, y: i32) {
+        self.set_status(x, y, BoardSquareStatus::Blocked)
     }
 
     pub fn can_place_at(&self, x: i32, y: i32) -> bool {
@@ -642,6 +748,19 @@ impl<'a> Board {
         for &square in &squares.squares {
             self.unplace_at(x + square.x, y + square.y)
         }
+    }
+
+    pub fn can_set_aside(&self, count: usize) -> bool {
+        // At most 2 squares can be left set aside
+        self.set_aside_count + count <= 2
+    }
+
+    pub fn set_aside(&mut self, count: usize) {
+        self.set_aside_count -= count
+    }
+
+    pub fn unset_aside(&mut self, count: usize) {
+        self.set_aside_count += count
     }
 }
 
@@ -684,6 +803,10 @@ pub enum BoardSquareStatus {
 
 impl BoardSquareStatus {
     pub fn can_place(&self) -> bool {
+        self.is_empty()
+    }
+
+    pub fn is_empty(&self) -> bool {
         *self == Self::Empty
     }
 }
