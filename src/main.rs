@@ -7,14 +7,13 @@ fn main() {
     board.set_blocked(5, 6);
     board.set_blocked(6, 6);
 
-    board.set_blocked(3, 0);
-    board.set_blocked(1, 6);
+    board.set_target(4, 0);
+    board.set_target(2, 2);
 
+    board.print_squares();
+    
     let piece_specs = create_piece_specs();
     let pieces: Vec<Piece> = piece_specs.iter().map(|ps| Piece::from_piece_spec(ps)).collect();
-
-    let mut placed_pieces = PlacedPieces::new();
-    placed_pieces.place_pieces(&mut board, &pieces);
 
 //     for piece_spec in piece_specs.iter() {
 //         let edges = piece_spec.edges();
@@ -24,6 +23,15 @@ fn main() {
 //         println!("{:#?} = {:?}", piece.square_count, piece.orientations.len());
 // //        println!("{:#?}", piece);
 //     }
+
+    let mut placed_pieces = PlacedPieces::new();
+    if placed_pieces.place_pieces(&mut board, &pieces) {
+        println!("success!");
+        board.print_squares();
+    }
+    else {
+        println!("failure!");
+    }
 }
 
 //--------------------------------------------------
@@ -590,10 +598,13 @@ impl PlacedPieces {
     // Tries to place the next piece, returns true if successful, false if not
     pub fn try_place_next_piece(&mut self, board: &mut Board, pieces: &Vec<Piece>) -> bool {
         let piece_num = self.placed_pieces.len();
+//        println!("try_place_next_piece, piece_num: {:?}", piece_num);
         let piece = &pieces[piece_num];
         if let Some(placement) = Placement::new().next_placeable(board, piece) {
+//            println!("  placement: {:?}", placement);
+//            board.print_squares();
             // We're able to place this piece, so add it to the list
-            placement.place(board, piece);
+            placement.place(board, piece, piece_num);
             self.placed_pieces.push(placement);
             true
         }
@@ -607,11 +618,22 @@ impl PlacedPieces {
         if let Some(pp) = self.placed_pieces.pop() {
             let piece_num = self.placed_pieces.len();
             let piece = &pieces[piece_num];
-            if let Some(placement) = pp.next_placeable(board, piece) {
-                // We're able to place this piece, so add it to the list
-                placement.place(board, piece);
-                self.placed_pieces.push(placement);
-                true
+            // Remove the piece from the board
+            pp.unplace(board, piece);
+            
+            if let Some(next_placement) = pp.next_to_try(board, piece) {
+                if let Some(placement) = next_placement.next_placeable(board, piece) {
+                    // We're able to place this piece, so add it to the list
+//                    println!("try_place_prev_piece, piece_num: {:?}", piece_num);
+//                    println!("  placement: {:?}", placement);
+                    placement.place(board, piece, piece_num);
+                    self.placed_pieces.push(placement);
+//                    board.print_squares();
+                    true
+                }
+                else {
+                    false
+                }
             }
             else {
                 false
@@ -644,6 +666,7 @@ impl PlacedPieces {
             else {
                 // Try to place the next piece
                 if !self.try_place_next_piece(board, pieces) {
+//                    println!("backtracking");
                     if !self.backtrack(board, pieces) {
                         return false
                     }
@@ -674,9 +697,9 @@ impl Placement {
         }
     }
 
-    pub fn place(&self, board: &mut Board, piece: &Piece) {
+    pub fn place(&self, board: &mut Board, piece: &Piece, piece_num: usize) {
         match self {
-            Placement::Placed(pp) => {pp.place(board, piece);},
+            Placement::Placed(pp) => {pp.place(board, piece, piece_num);},
             Placement::SetAside => {board.set_aside(piece.square_count);},
         }
     }
@@ -739,9 +762,9 @@ impl PiecePlacement {
         board.can_place_squares_at(self.x, self.y, piece_squares)
     }
     
-    pub fn place(&self, board: &mut Board, piece: &Piece) {
+    pub fn place(&self, board: &mut Board, piece: &Piece, piece_num: usize) {
         let piece_squares = &piece.orientations[self.orientation_num];
-        board.place_squares_at(self.x, self.y, piece_squares)
+        board.place_squares_at(self.x, self.y, piece_squares, piece_num)
     }
     
     pub fn unplace(&self, board: &mut Board, piece: &Piece) {
@@ -752,21 +775,21 @@ impl PiecePlacement {
     // Return the next possible placement to try, None if there aren't any more
     pub fn next_to_try(&self, board: &Board, piece: &Piece) -> Option<Self> {
         let piece_squares = &piece.orientations[self.orientation_num];
-        if self.x < (board.column_count as i32) - piece_squares.extents.r {
+        if self.x < (board.column_count as i32) - piece_squares.extents.r - 1 {
             Some(Self {
                 orientation_num: self.orientation_num,
                 x: self.x + 1,
                 y: self.y,
             })
         }
-        else if self.y < (board.row_count as i32) - piece_squares.extents.b {
+        else if self.y < (board.row_count as i32) - piece_squares.extents.b - 1 {
             Some(Self {
                 orientation_num: self.orientation_num,
                 x: 0,
                 y: self.y + 1,
             })
         }
-        else if self.orientation_num < piece.orientations.len() {
+        else if self.orientation_num < piece.orientations.len() - 1 {
             Some(Self {
                 orientation_num: self.orientation_num + 1,
                 x: 0,
@@ -816,6 +839,20 @@ impl<'a> Board {
             set_aside_count: 0,
         }
     }
+
+    pub fn print_squares(&self) {
+        for row in &self.rows {
+            for square in &row.squares {
+                match square.status {
+                    BoardSquareStatus::Target => {print!("T");}
+                    BoardSquareStatus::Blocked => {print!("&");}
+                    BoardSquareStatus::Placed(p) => {print!("{:X}", p);}
+                    BoardSquareStatus::Empty => {print!("-");}
+                }
+            }
+            println!("");
+        }
+    }
     
     pub fn square_at(&'a self, x: i32, y: i32) -> &'a BoardSquare {
         let xu:usize = usize::try_from(x).expect("");
@@ -853,8 +890,8 @@ impl<'a> Board {
         self.square_at(x, y).status.can_place()
     }
 
-    pub fn place_at(&mut self, x: i32, y: i32) {
-        self.square_at_mut(x, y).status = BoardSquareStatus::Placed;
+    pub fn place_at(&mut self, x: i32, y: i32, piece_num: usize) {
+        self.square_at_mut(x, y).status = BoardSquareStatus::Placed(piece_num);
     }
 
     pub fn unplace_at(&mut self, x: i32, y: i32) {
@@ -870,9 +907,9 @@ impl<'a> Board {
         true
     }
 
-    pub fn place_squares_at(&mut self, x: i32, y: i32, squares: &PieceSquares) {
+    pub fn place_squares_at(&mut self, x: i32, y: i32, squares: &PieceSquares, piece_num: usize) {
         for &square in &squares.squares {
-            self.place_at(x + square.x, y + square.y)
+            self.place_at(x + square.x, y + square.y, piece_num)
         }
     }
 
@@ -928,7 +965,7 @@ pub enum BoardSquareStatus {
     // Permanently blocked square on the board
     Blocked,
     // Occupied by a piece
-    Placed,
+    Placed(usize),
     // Available for a piece
     Empty,
 }
