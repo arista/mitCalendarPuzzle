@@ -1,3 +1,5 @@
+use std::env;
+
 fn main() {
     let mut board = Board::new(7, 7);
     board.set_blocked(6, 0);
@@ -7,31 +9,51 @@ fn main() {
     board.set_blocked(5, 6);
     board.set_blocked(6, 6);
 
-    board.set_target(4, 0);
-    board.set_target(2, 2);
+    if let Some(args) = get_args() {
+        let month_x = (args.month - 1) % 6;
+        let month_y = (args.month - 1) / 6;
+        let date_x = (args.date - 1) % 7;
+        let date_y = 2 + ((args.date - 1) / 7);
 
-    board.print_squares();
-    
-    let piece_specs = create_piece_specs();
-    let pieces: Vec<Piece> = piece_specs.iter().map(|ps| Piece::from_piece_spec(ps)).collect();
+        board.set_target(month_x as i32, month_y as i32);
+        board.set_target(date_x as i32, date_y as i32);
 
-//     for piece_spec in piece_specs.iter() {
-//         let edges = piece_spec.edges();
-//         let outline = edges.find_outline();
-//         let piece = Piece::from_piece_spec(piece_spec);
-// //        println!("{:#?}", outline);
-//         println!("{:#?} = {:?}", piece.square_count, piece.orientations.len());
-// //        println!("{:#?}", piece);
-//     }
-
-    let mut placed_pieces = PlacedPieces::new();
-    if placed_pieces.place_pieces(&mut board, &pieces) {
-        println!("success!");
+        println!("Initial board:");
+        println!();
         board.print_squares();
+        println!();
+        
+        let piece_specs = create_piece_specs();
+        let pieces: Vec<Piece> = piece_specs.iter().map(|ps| Piece::from_piece_spec(ps)).collect();
+        let mut placed_pieces = PlacedPieces::new();
+        if placed_pieces.place_pieces(&mut board, &pieces) {
+            println!("success!");
+            println!();
+            board.print_squares();
+        }
+        else {
+            println!("failure!");
+        }
+    }
+}
+
+pub fn get_args() -> Option<Args> {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 3 {
+        println!("Usage: <executable> {{month num}} {{date num}}");
+        None
     }
     else {
-        println!("failure!");
+        let month = str::parse::<usize>(&args[1]).unwrap();
+        let date = str::parse::<usize>(&args[2]).unwrap();
+        Some(Args {month, date})
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Copy, Eq, PartialOrd, Ord)]
+pub struct Args {
+    pub month: usize,
+    pub date: usize,
 }
 
 //--------------------------------------------------
