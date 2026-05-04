@@ -1057,11 +1057,11 @@ impl<'a> Board {
     }
 
     pub fn set_aside(&mut self, count: usize) {
-        self.set_aside_count -= count
+        self.set_aside_count += count
     }
 
     pub fn unset_aside(&mut self, count: usize) {
-        self.set_aside_count += count
+        self.set_aside_count -= count
     }
 }
 
