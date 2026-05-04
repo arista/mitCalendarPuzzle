@@ -1,4 +1,6 @@
 use std::env;
+use std::fs;
+use std::io::Error;
 
 fn main() {
     let mut board = Board::new(7, 7);
@@ -26,10 +28,20 @@ fn main() {
         let piece_specs = create_piece_specs();
         let pieces: Vec<Piece> = piece_specs.iter().map(|ps| Piece::from_piece_spec(ps)).collect();
         let mut placed_pieces = PlacedPieces::new();
-        if placed_pieces.place_pieces(&mut board, &pieces) {
+        let mut stats = Stats::default();
+        if placed_pieces.place_pieces(&mut board, &pieces, &mut stats) {
             println!("success!");
             println!();
+
+            for (piece_num, placed_piece) in placed_pieces.placed_pieces.iter().enumerate() {
+                println!("piece {} - {:?}", piece_num, placed_piece)
+            }
+            println!();
+            println!("Stats: {:?}", stats);
+            println!();
+            
             board.print_squares();
+            print_svg(&args.filename, &pieces, &board, &placed_pieces).unwrap();
         }
         else {
             println!("failure!");
@@ -39,21 +51,83 @@ fn main() {
 
 pub fn get_args() -> Option<Args> {
     let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        println!("Usage: <executable> {{month num}} {{date num}}");
+    if args.len() < 4 {
+        println!("Usage: <executable> {{month num}} {{date num}} {{filename}}");
         None
     }
     else {
         let month = str::parse::<usize>(&args[1]).unwrap();
         let date = str::parse::<usize>(&args[2]).unwrap();
-        Some(Args {month, date})
+        let filename = args[3].clone();
+        Some(Args {month, date, filename})
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Copy, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Args {
     pub month: usize,
     pub date: usize,
+    pub filename: String,
+}
+
+pub fn print_svg(filename: &String, pieces: &Vec<Piece>, board: &Board, placed: &PlacedPieces) -> Result<(), Error> {
+    let mut lines = Vec::<String>::new();
+    lines.push(format!("<!DOCTYPE html>"));
+    lines.push(format!("<html lang=\"en\">"));
+    lines.push(format!("<head>"));
+    lines.push(format!("    <meta charset=\"UTF-8\">"));
+    lines.push(format!("    <title>SVG Minimal Example</title>"));
+    lines.push(format!("</head>"));
+    lines.push(format!("<body>"));
+    lines.push(format!("    <!-- SVG Viewport is 10x10. ViewBox scales it to fit container -->"));
+    lines.push(format!("    <svg width=\"500\" height=\"500\" viewBox=\"0 0 {} {}\" style=\"border: 1px solid black;\">", board.column_count, board.row_count));
+
+    for (y, row) in board.rows.iter().enumerate() {
+        for (x, square) in row.squares.iter().enumerate() {
+            match square.status {
+                BoardSquareStatus::Target => {
+                    lines.push(format!("        <path d=\"M 0 0 L 1 0 L 1 1 L 0 1 Z\" fill=\"red\" transform=\"translate({},{})\"/>", x, y));
+                }
+                BoardSquareStatus::Blocked => {
+                    lines.push(format!("        <path d=\"M 0 0 L 1 0 L 1 1 L 0 1 Z\" fill=\"gray\" transform=\"translate({},{})\"/>", x, y));
+                }
+                _ => ()
+            }
+        }
+    }
+
+    for (piece_num, placed_piece) in placed.placed_pieces.iter().enumerate() {
+        match placed_piece {
+            Placement::Placed(pp) => {
+                let piece = &pieces[piece_num];
+                let x = pp.x;
+                let y = pp.y;
+                let outline = &piece.orientations[pp.orientation_num].outline;
+                let mut path_str_items = Vec::<String>::new();
+                for (i, point) in outline.points.iter().enumerate() {
+                    match i {
+                        0 => {path_str_items.push(format!("M {} {}", point.x, point.y))}
+                        _ => {path_str_items.push(format!("L {} {}", point.x, point.y))}
+                    }
+                }
+                path_str_items.push(format!("Z"));
+                let path_str = path_str_items.join(" ");
+                lines.push(format!("        <path d=\"{}\" stroke=\"blue\" stroke-width=\"0.1\" transform=\"translate({},{})\"/>", path_str, x, y));
+            }
+            _ => ()
+        }
+    }
+    
+    // lines.push(format!("        <!-- Filled Path (Red) -->"));
+    // lines.push(format!("        <path d=\"M 1 1 L 9 1 L 5 9 Z\" fill=\"red\" />"));
+    // lines.push(format!("        "));
+    // lines.push(format!("        <!-- Outlined Path (Blue) -->"));
+    // lines.push(format!("        <path d=\"M 1 9 L 9 9 L 5 1 Z\" fill=\"none\" stroke=\"blue\" stroke-width=\"0.1\" />"));
+    lines.push(format!("    </svg>"));
+    lines.push(format!("</body>"));
+    lines.push(format!("</html>"));
+
+    fs::write(filename, lines.join("\n"))
 }
 
 //--------------------------------------------------
@@ -131,10 +205,8 @@ pub fn create_piece_specs() -> Vec<PieceSpec> {
                 PieceSquare {x: 0, y: 0},
                 PieceSquare {x: 1, y: 0},
                 PieceSquare {x: 2, y: 0},
-                PieceSquare {x: 0, y: 1},
                 PieceSquare {x: 1, y: 1},
                 PieceSquare {x: 2, y: 1},
-                PieceSquare {x: 3, y: 1},
             ),
         },
         PieceSpec {
@@ -371,6 +443,14 @@ impl Path {
         ret
     }
 
+    pub fn extents(&self) -> Extents {
+        let mut ret = Extents::default();
+        for point in &self.points {
+            ret.add_point(point);
+        }
+        ret
+    }
+
     pub fn orient(&self, o: &Orientation) -> Path {
         Path {
             points: self.points.iter().map(|p| p.orient(o)).collect(),
@@ -501,7 +581,7 @@ impl PieceSquaresBuilder {
         self.squares.push(s);
     }
 
-    pub fn from_spec(spec: &PieceSpec, o: &Orientation) -> PieceSquares {
+    pub fn from_spec(spec: &PieceSpec, o: &Orientation, orig_outline: &Path) -> PieceSquares {
         let mut ps1 = PieceSquaresBuilder::default();
         for &s in spec.squares.iter() {
             ps1.add(s.orient(o));
@@ -513,7 +593,10 @@ impl PieceSquaresBuilder {
         // Sort the squares so we can compare against other sets of squares
         squares.sort();
 
-        let outline = edges_from_piece_squares(&squares).find_outline().unwrap_or_default();
+        let oriented_outline = orig_outline.orient(o);
+        let oriented_outline_extents = oriented_outline.extents();
+        let outline_translation = oriented_outline_extents.to_translation();
+        let outline = oriented_outline.translate(&outline_translation);
 
         PieceSquares {
             extents: translated_extents,
@@ -548,19 +631,23 @@ impl Extents {
         }
     }
 
+    pub fn add_point(&mut self, p: &Point) {
+        if p.x < self.l {
+            self.l = p.x;
+        }
+        if p.x > self.r {
+            self.r = p.x;
+        }
+        if p.y < self.t {
+            self.t = p.y;
+        }
+        if p.y > self.b {
+            self.b = p.y;
+        }
+    }
+
     pub fn add(&mut self, s: &PieceSquare) {
-        if s.x < self.l {
-            self.l = s.x;
-        }
-        if s.x > self.r {
-            self.r = s.x;
-        }
-        if s.y < self.t {
-            self.t = s.y;
-        }
-        if s.y > self.b {
-            self.b = s.y;
-        }
+        self.add_point(&Point {x: s.x, y: s.y});
     }
 
     // Returns the translate that moves l, t to 0, 0
@@ -596,7 +683,8 @@ pub struct Piece {
 impl Piece {
     pub fn from_piece_spec(spec: &PieceSpec) -> Piece {
         let square_count = spec.squares.len();
-        let mut orientations: Vec<PieceSquares> = Orientation::all().iter().map(|o| PieceSquaresBuilder::from_spec(&spec, o)).collect();
+        let orig_outline = edges_from_piece_squares(&spec.squares).find_outline().unwrap();
+        let mut orientations: Vec<PieceSquares> = Orientation::all().iter().map(|o| PieceSquaresBuilder::from_spec(&spec, o, &orig_outline)).collect();
         // Remove duplicate orientations
         orientations.sort();
         orientations.dedup();
@@ -618,7 +706,7 @@ impl PlacedPieces {
     }
 
     // Tries to place the next piece, returns true if successful, false if not
-    pub fn try_place_next_piece(&mut self, board: &mut Board, pieces: &Vec<Piece>) -> bool {
+    pub fn try_place_next_piece(&mut self, board: &mut Board, pieces: &Vec<Piece>, stats: &mut Stats) -> bool {
         let piece_num = self.placed_pieces.len();
 //        println!("try_place_next_piece, piece_num: {:?}", piece_num);
         let piece = &pieces[piece_num];
@@ -628,6 +716,7 @@ impl PlacedPieces {
             // We're able to place this piece, so add it to the list
             placement.place(board, piece, piece_num);
             self.placed_pieces.push(placement);
+            stats.place();
             true
         }
         else {
@@ -636,12 +725,13 @@ impl PlacedPieces {
     }
 
     // Pops the previous piece and tries to advance and place it.  Returns true if successful, false if not
-    pub fn try_place_prev_piece(&mut self, board: &mut Board, pieces: &Vec<Piece>) -> bool {
+    pub fn try_place_prev_piece(&mut self, board: &mut Board, pieces: &Vec<Piece>, stats: &mut Stats) -> bool {
         if let Some(pp) = self.placed_pieces.pop() {
             let piece_num = self.placed_pieces.len();
             let piece = &pieces[piece_num];
             // Remove the piece from the board
             pp.unplace(board, piece);
+            stats.unplace();
             
             if let Some(next_placement) = pp.next_to_try(board, piece) {
                 if let Some(placement) = next_placement.next_placeable(board, piece) {
@@ -650,6 +740,7 @@ impl PlacedPieces {
 //                    println!("  placement: {:?}", placement);
                     placement.place(board, piece, piece_num);
                     self.placed_pieces.push(placement);
+                    stats.place();
 //                    board.print_squares();
                     true
                 }
@@ -667,18 +758,18 @@ impl PlacedPieces {
     }
 
     // Go through the already-placed pieces and keep advancing until we get to one we can advance and place.  Returns true if successful, false if none could be found
-    pub fn backtrack(&mut self, board: &mut Board, pieces: &Vec<Piece>) -> bool {
+    pub fn backtrack(&mut self, board: &mut Board, pieces: &Vec<Piece>, stats: &mut Stats) -> bool {
         loop {
             if self.placed_pieces.is_empty() {
                 return false
             }
-            else if self.try_place_prev_piece(board, pieces) {
+            else if self.try_place_prev_piece(board, pieces, stats) {
                 return true
             }
         }
     }
 
-    pub fn place_pieces(&mut self, board: &mut Board, pieces: &Vec<Piece>) -> bool {
+    pub fn place_pieces(&mut self, board: &mut Board, pieces: &Vec<Piece>, stats: &mut Stats) -> bool {
         loop {
             let piece_num = self.placed_pieces.len();
             if piece_num >= pieces.len() {
@@ -687,14 +778,33 @@ impl PlacedPieces {
             }
             else {
                 // Try to place the next piece
-                if !self.try_place_next_piece(board, pieces) {
-//                    println!("backtracking");
-                    if !self.backtrack(board, pieces) {
+                if !self.try_place_next_piece(board, pieces, stats) {
+                    stats.backtrack();
+                    if !self.backtrack(board, pieces, stats) {
                         return false
                     }
                 }
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct Stats {
+    placed: usize,
+    unplaced: usize,
+    backtracked: usize,
+}
+
+impl Stats {
+    pub fn place(&mut self) {
+        self.placed += 1;
+    }
+    pub fn unplace(&mut self) {
+        self.unplaced += 1;
+    }
+    pub fn backtrack(&mut self) {
+        self.backtracked += 1;
     }
 }
 
