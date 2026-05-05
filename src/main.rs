@@ -908,6 +908,7 @@ impl PiecePlacement {
     pub fn next_to_try(&self, board: &Board, piece: &Piece) -> Option<Self> {
         let piece_squares = &piece.orientations[self.orientation_num];
         if self.x < (board.column_count as i32) - piece_squares.extents.r - 1 {
+//        if self.x < (board.column_count as i32) - 1 {
             Some(Self {
                 orientation_num: self.orientation_num,
                 x: self.x + 1,
@@ -915,6 +916,7 @@ impl PiecePlacement {
             })
         }
         else if self.y < (board.row_count as i32) - piece_squares.extents.b - 1 {
+//        else if self.y < (board.row_count as i32) - 1 {
             Some(Self {
                 orientation_num: self.orientation_num,
                 x: 0,
@@ -986,6 +988,10 @@ impl<'a> Board {
         }
     }
     
+    pub fn has_square_at(& self, x: i32, y: i32) -> bool {
+        x < self.column_count.try_into().unwrap() && y < self.row_count.try_into().unwrap()
+    }
+    
     pub fn square_at(&'a self, x: i32, y: i32) -> &'a BoardSquare {
         let xu:usize = usize::try_from(x).expect("");
         let yu:usize = usize::try_from(y).expect("y cannot be negative");
@@ -1032,7 +1038,9 @@ impl<'a> Board {
 
     pub fn can_place_squares_at(&self, x: i32, y: i32, squares: &PieceSquares) -> bool {
         for &square in &squares.squares {
-            if !self.can_place_at(x + square.x, y + square.y) {
+            let xx = x + square.x;
+            let yy = y + square.y;
+            if !self.has_square_at(xx, yy) || !self.can_place_at(xx, yy) {
                 return false
             }
         }
